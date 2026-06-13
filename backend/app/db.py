@@ -3,7 +3,7 @@ from pymongo import MongoClient
 from pymongo.database import Database
 
 
-def init_db(app) -> None:
+def init_app(app) -> None:
     client = MongoClient(
         app.config["MONGO_URI"],
         serverSelectionTimeoutMS=app.config["MONGO_SERVER_SELECTION_TIMEOUT_MS"],

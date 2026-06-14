@@ -15,6 +15,7 @@ from app.models.validation import (
     validate_email_status,
     validate_firebase_uid,
     validate_non_empty_string,
+    validate_non_negative_int,
     validate_object_id,
     validate_optional_datetime,
     validate_optional_price,
@@ -34,6 +35,7 @@ class Product:
     currency: str = "INR"
     last_checked_at: datetime = field(default_factory=utc_now)
     created_at: datetime = field(default_factory=utc_now)
+    consecutive_failures: int = 0
     _id: ObjectId | None = None
 
     def __post_init__(self):
@@ -55,6 +57,13 @@ class Product:
         object.__setattr__(
             self, "created_at", validate_datetime(self.created_at, "created_at")
         )
+        object.__setattr__(
+            self,
+            "consecutive_failures",
+            validate_non_negative_int(
+                self.consecutive_failures, "consecutive_failures"
+            ),
+        )
 
     def to_document(self) -> dict:
         document = {
@@ -66,6 +75,7 @@ class Product:
             "currency": self.currency,
             "last_checked_at": self.last_checked_at,
             "created_at": self.created_at,
+            "consecutive_failures": self.consecutive_failures,
         }
         if self._id is not None:
             document["_id"] = self._id
@@ -83,6 +93,7 @@ class Product:
             currency=document["currency"],
             last_checked_at=document["last_checked_at"],
             created_at=document["created_at"],
+            consecutive_failures=document.get("consecutive_failures", 0),
         )
 
 

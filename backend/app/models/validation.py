@@ -129,6 +129,14 @@ def validate_optional_datetime(
     return validate_datetime(value, field_name)
 
 
+def validate_non_negative_int(value, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{field_name} must be an integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must not be negative")
+    return value
+
+
 def validate_bool(value, field_name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{field_name} must be a boolean")

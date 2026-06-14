@@ -44,6 +44,7 @@ def test_product_round_trips_from_document():
         "currency": "INR",
         "last_checked_at": NOW,
         "created_at": NOW,
+        "consecutive_failures": 2,
     }
 
     product = Product.from_document(document)

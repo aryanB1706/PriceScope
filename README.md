@@ -1,6 +1,6 @@
 # PriceScope
 
-E-commerce price intelligence platform. This repository currently contains the project skeleton, MongoDB data model, and a MongoDB-backed health check; scraping and UI features are not implemented yet.
+E-commerce price intelligence platform. This repository currently contains the project skeleton, MongoDB data model, offline-tested scraping layer, and a MongoDB-backed health check; UI features are not implemented yet.
 
 ## Stack
 
@@ -19,7 +19,7 @@ PriceScope/
 │   │   ├── db.py          # MongoDB client, database access, and ping
 │   │   ├── models/        # Dataclasses, validation, and index setup
 │   │   ├── routes/        # HTTP blueprints (health check for now)
-│   │   ├── scrapers/      # Retailer scraping modules (planned)
+│   │   ├── scrapers/      # Fetch policy, store parsers, and URL registry
 │   │   ├── services/      # Business logic and authentication services (planned)
 │   │   └── jobs/          # APScheduler jobs and schedules (planned)
 │   ├── tests/             # pytest suite
@@ -36,7 +36,7 @@ PriceScope/
 
 - **`app/models/`** defines BSON-safe dataclasses, validation helpers, enums, and MongoDB indexes.
 - **`app/routes/`** exposes API endpoints as Flask blueprints.
-- **`app/scrapers/`** will contain one module per retailer, responsible for fetching and parsing product pages.
+- **`app/scrapers/`** contains the shared fetch policy, per-retailer parsers, and the URL-to-scraper registry.
 - **`app/services/`** will hold reusable business logic such as authentication, price comparisons, and alerts.
 - **`app/jobs/`** will define scheduled APScheduler tasks, such as recurring price refreshes.
 - **`tests/`** contains backend tests, using an isolated test configuration.
@@ -71,6 +71,14 @@ Prices are stored as MongoDB `Decimal128` to avoid floating-point rounding error
 
 `price_history` is a separate collection rather than an array on `products` because observations grow without bound, would eventually hit MongoDB's document size limit, and would make product updates increasingly expensive. A separate collection also allows efficient indexed queries for 30-day lows, retention policies, and aggregate price analytics without loading full product documents.
 
+### Scraping
+
+`BaseScraper.fetch()` uses a realistic browser User-Agent, a request timeout, retries with exponential backoff, a random 1–3 second gap between requests, and `robots.txt` checks. Flipkart and Myntra parsers read schema.org `application/ld+json` product data. Croma reads its JSON-LD offer and falls back to visible stock markers because its structured data omits availability.
+
+Raw `curl` requests to Croma initially returned an Akamai `403`; the browser-like `requests.Session` User-Agent configured in `BaseScraper` was accepted. No proxy or captcha bypass is used. If a store starts blocking requests, `fetch()` raises `ScraperBlockedError`; the legal fallbacks are manually saved pages or replacing that store with a scraper-friendly retailer.
+
+Scraper tests load saved fixtures from `backend/tests/fixtures/` and never access the internet. Fixture sources and retrieval details are documented in that directory.
+
 ### Health check
 
 ```http
@@ -102,7 +110,7 @@ cd backend
 pytest
 ```
 
-The tests mock the MongoDB ping and use `mongomock` for index tests, so they do not require a running database.
+The tests mock the MongoDB ping, use `mongomock` for index tests, and parse saved HTML fixtures, so they do not require a running database or network access.
 
 ## Frontend setup
 

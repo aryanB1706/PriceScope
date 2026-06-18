@@ -1,10 +1,18 @@
 import os
+import tempfile
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class Config:
@@ -15,3 +23,10 @@ class Config:
         os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "2000")
     )
     FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+
+    SCHEDULER_ENABLED = _env_bool("SCHEDULER_ENABLED", False)
+    SCRAPE_INTERVAL_HOURS = float(os.getenv("SCRAPE_INTERVAL_HOURS", "6"))
+    SCHEDULER_LOCK_PATH = os.getenv(
+        "SCHEDULER_LOCK_PATH",
+        os.path.join(tempfile.gettempdir(), "pricescope-scheduler.lock"),
+    )

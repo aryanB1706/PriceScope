@@ -21,7 +21,7 @@ PriceScope/
 │   │   ├── routes/        # HTTP blueprints (health check for now)
 │   │   ├── scrapers/      # Fetch policy, store parsers, and URL registry
 │   │   ├── services/      # Business logic and authentication services (planned)
-│   │   └── jobs/          # APScheduler jobs and schedules (planned)
+│   │   └── jobs/          # APScheduler scrape job and scheduler setup
 │   ├── tests/             # pytest suite
 │   ├── requirements.txt
 │   ├── pytest.ini
@@ -38,7 +38,7 @@ PriceScope/
 - **`app/routes/`** exposes API endpoints as Flask blueprints.
 - **`app/scrapers/`** contains the shared fetch policy, per-retailer parsers, and the URL-to-scraper registry.
 - **`app/services/`** will hold reusable business logic such as authentication, price comparisons, and alerts.
-- **`app/jobs/`** will define scheduled APScheduler tasks, such as recurring price refreshes.
+- **`app/jobs/`** defines the APScheduler scrape job that periodically refreshes watched products.
 - **`tests/`** contains backend tests, using an isolated test configuration.
 - **`frontend/`** is the Vite + React client and currently only renders a placeholder page.
 
@@ -66,6 +66,7 @@ The API runs at `http://localhost:5000`. `init-db` is safe to run repeatedly.
 | `price_history` | One document per price observation | `(product_id, scraped_at DESC)` |
 | `watches` | User price watches and alert preferences | Unique `(user_id, product_id)` |
 | `alerts` | Triggered price alerts and email status | None yet |
+| `job_runs` | One summary per scrape run (counts, duration) | None yet |
 
 Prices are stored as MongoDB `Decimal128` to avoid floating-point rounding errors. Datetimes are timezone-aware UTC. The Python models are plain frozen dataclasses with validation and BSON serialization helpers; there is no ORM.
 
@@ -78,6 +79,12 @@ Prices are stored as MongoDB `Decimal128` to avoid floating-point rounding error
 Raw `curl` requests to Croma initially returned an Akamai `403`; the browser-like `requests.Session` User-Agent configured in `BaseScraper` was accepted. No proxy or captcha bypass is used. If a store starts blocking requests, `fetch()` raises `ScraperBlockedError`; the legal fallbacks are manually saved pages or replacing that store with a scraper-friendly retailer.
 
 Scraper tests load saved fixtures from `backend/tests/fixtures/` and never access the internet. Fixture sources and retrieval details are documented in that directory.
+
+### Scheduled scraping
+
+Every `SCRAPE_INTERVAL_HOURS` (default 6) a background job refreshes every product that has at least one watch, using up to 3 worker threads and a 2-second gap between requests to the same store. One failing product never stops the run. Each run is logged and stored in `job_runs`. Run it manually with `flask --app app scrape-now`.
+
+The scheduler is off unless `SCHEDULER_ENABLED=true`. It starts at most once per host: it is skipped in the Flask reloader's parent process, and a non-blocking file lock (`SCHEDULER_LOCK_PATH`) lets only one process (for example one gunicorn worker) own it. For several hosts, enable it on a single one.
 
 ### Health check
 
@@ -135,5 +142,7 @@ See `backend/.env.example`. The key settings are:
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | MongoDB connection timeout | `2000` |
 | `SECRET_KEY` | Flask secret key | Development placeholder |
 | `FIREBASE_CREDENTIALS_PATH` | Path to Firebase service account JSON | Empty |
+| `SCHEDULER_ENABLED` | Start the background scraper in the server process | `false` |
+| `SCRAPE_INTERVAL_HOURS` | Hours between scheduled scrape runs | `6` |
 
 Never commit the real `.env` or Firebase credentials.

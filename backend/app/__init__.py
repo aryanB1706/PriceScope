@@ -3,6 +3,7 @@ from flask import Flask
 
 from app.config import Config
 from app.db import get_db, init_app as init_mongo
+from app.jobs.scheduler import init_scheduler, run_scrape_job
 from app.models import init_db
 from app.routes import register_routes
 
@@ -16,10 +17,21 @@ def create_app(config_overrides: dict | None = None) -> Flask:
 
     init_mongo(app)
     register_routes(app)
+    init_scheduler(app)
 
     @app.cli.command("init-db")
     def init_db_command():
         init_db(get_db())
         click.echo("Database indexes initialized.")
+
+    @app.cli.command("scrape-now")
+    def scrape_now_command():
+        summary = run_scrape_job(get_db(), trigger="manual")
+        click.echo(
+            f"Checked {summary.products_checked} products: "
+            f"{summary.succeeded} succeeded, {summary.failed} failed, "
+            f"{summary.price_changes} price changes "
+            f"({summary.duration_seconds:.1f}s)."
+        )
 
     return app

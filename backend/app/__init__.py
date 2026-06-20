@@ -2,7 +2,9 @@ import click
 from flask import Flask
 
 from app.config import Config
+from app.cors import init_cors
 from app.db import get_db, init_app as init_mongo
+from app.errors import register_error_handlers
 from app.jobs.scheduler import init_scheduler, run_scrape_job
 from app.models import init_db
 from app.routes import register_routes
@@ -16,6 +18,8 @@ def create_app(config_overrides: dict | None = None) -> Flask:
         app.config.update(config_overrides)
 
     init_mongo(app)
+    init_cors(app)
+    register_error_handlers(app)
     register_routes(app)
     init_scheduler(app)
 

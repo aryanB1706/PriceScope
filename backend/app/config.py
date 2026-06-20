@@ -23,6 +23,7 @@ class Config:
         os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "2000")
     )
     FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
+    FRONTEND_ORIGIN = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
     SCHEDULER_ENABLED = _env_bool("SCHEDULER_ENABLED", False)
     SCRAPE_INTERVAL_HOURS = float(os.getenv("SCRAPE_INTERVAL_HOURS", "6"))

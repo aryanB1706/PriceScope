@@ -7,7 +7,7 @@ from app.scrapers.base import (
 from app.scrapers.croma import CromaScraper
 from app.scrapers.flipkart import FlipkartScraper
 from app.scrapers.myntra import MyntraScraper
-from app.scrapers.registry import SCRAPER_REGISTRY, get_scraper
+from app.scrapers.registry import SCRAPER_REGISTRY, get_scraper, scraper_class_for
 
 __all__ = [
     "BaseScraper",
@@ -19,4 +19,5 @@ __all__ = [
     "ScraperBlockedError",
     "ScraperError",
     "get_scraper",
+    "scraper_class_for",
 ]

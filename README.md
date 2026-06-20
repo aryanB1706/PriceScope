@@ -18,9 +18,9 @@ PriceScope/
 │   │   ├── config.py      # Environment-based configuration
 │   │   ├── db.py          # MongoDB client, database access, and ping
 │   │   ├── models/        # Dataclasses, validation, and index setup
-│   │   ├── routes/        # HTTP blueprints (health check for now)
+│   │   ├── routes/        # HTTP blueprints (health, products, watches, alerts)
 │   │   ├── scrapers/      # Fetch policy, store parsers, and URL registry
-│   │   ├── services/      # Business logic and authentication services (planned)
+│   │   ├── services/      # Price tracker, watches, and Firebase auth
 │   │   └── jobs/          # APScheduler scrape job and scheduler setup
 │   ├── tests/             # pytest suite
 │   ├── requirements.txt
@@ -37,7 +37,7 @@ PriceScope/
 - **`app/models/`** defines BSON-safe dataclasses, validation helpers, enums, and MongoDB indexes.
 - **`app/routes/`** exposes API endpoints as Flask blueprints.
 - **`app/scrapers/`** contains the shared fetch policy, per-retailer parsers, and the URL-to-scraper registry.
-- **`app/services/`** will hold reusable business logic such as authentication, price comparisons, and alerts.
+- **`app/services/`** holds reusable business logic: price tracking, watch management, and Firebase token verification.
 - **`app/jobs/`** defines the APScheduler scrape job that periodically refreshes watched products.
 - **`tests/`** contains backend tests, using an isolated test configuration.
 - **`frontend/`** is the Vite + React client and currently only renders a placeholder page.
@@ -119,6 +119,45 @@ pytest
 
 The tests mock the MongoDB ping, use `mongomock` for index tests, and parse saved HTML fixtures, so they do not require a running database or network access.
 
+## API
+
+All routes except `/api/health` need a Firebase ID token: `Authorization: Bearer <ID_TOKEN>`. Prices are JSON numbers, timestamps are ISO 8601 UTC. Errors always look like `{"error": {"code": "...", "message": "..."}}`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/products` | Track a product URL (creates your watch) |
+| `GET` | `/api/products` | Your watched products with lowest/highest price and 30-day-low flag |
+| `GET` | `/api/products/<id>/history?days=30` | Price points for charting (`days` 1–365) |
+| `PATCH` | `/api/watches/<id>` | Update `target_price` (null clears it) and/or `alert_on_30d_low` |
+| `DELETE` | `/api/watches/<id>` | Stop watching |
+| `GET` | `/api/alerts?limit=50` | Your alert history, newest first (`limit` 1–200) |
+
+```bash
+TOKEN="<firebase-id-token>"
+
+# Track a product
+curl -X POST http://localhost:5000/api/products \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"url": "https://www.flipkart.com/.../p/itm123", "target_price": 2499, "alert_on_30d_low": true}'
+
+# List watched products
+curl http://localhost:5000/api/products -H "Authorization: Bearer $TOKEN"
+
+# Price history for charting
+curl "http://localhost:5000/api/products/<product_id>/history?days=30" -H "Authorization: Bearer $TOKEN"
+
+# Update / delete a watch
+curl -X PATCH http://localhost:5000/api/watches/<watch_id> \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"target_price": 1999}'
+curl -X DELETE http://localhost:5000/api/watches/<watch_id> -H "Authorization: Bearer $TOKEN"
+
+# Alert history
+curl http://localhost:5000/api/alerts -H "Authorization: Bearer $TOKEN"
+```
+
+Status codes: `400` invalid input or unsupported store, `401` missing/invalid token, `404` not found (including another user's watch or product), `409` already watching, `502` the store could not be scraped, `503` Firebase unreachable. Cross-origin requests are allowed only from `FRONTEND_ORIGIN`.
+
 ## Frontend setup
 
 Requires Node.js 18+.
@@ -142,6 +181,7 @@ See `backend/.env.example`. The key settings are:
 | `MONGO_SERVER_SELECTION_TIMEOUT_MS` | MongoDB connection timeout | `2000` |
 | `SECRET_KEY` | Flask secret key | Development placeholder |
 | `FIREBASE_CREDENTIALS_PATH` | Path to Firebase service account JSON | Empty |
+| `FRONTEND_ORIGIN` | Only browser origin allowed by CORS | `http://localhost:5173` |
 | `SCHEDULER_ENABLED` | Start the background scraper in the server process | `false` |
 | `SCRAPE_INTERVAL_HOURS` | Hours between scheduled scrape runs | `6` |
 

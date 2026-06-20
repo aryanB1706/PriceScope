@@ -12,11 +12,15 @@ SCRAPER_REGISTRY: dict[str, type[BaseScraper]] = {
 }
 
 
-def get_scraper(url: str, **options) -> BaseScraper:
+def scraper_class_for(url: str) -> type[BaseScraper]:
     hostname = (urlparse(url).hostname or "").lower()
 
     for domain, scraper_class in SCRAPER_REGISTRY.items():
         if hostname == domain or hostname.endswith(f".{domain}"):
-            return scraper_class(**options)
+            return scraper_class
 
     raise ScraperError(f"No scraper registered for domain: {hostname or url!r}")
+
+
+def get_scraper(url: str, **options) -> BaseScraper:
+    return scraper_class_for(url)(**options)

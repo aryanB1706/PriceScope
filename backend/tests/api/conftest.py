@@ -144,7 +144,7 @@ def add_alert(db):
                 reason="target_price",
                 old_price="1000",
                 new_price=new_price,
-                sent_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
+                detected_at=datetime.now(timezone.utc) - timedelta(minutes=minutes_ago),
             ).to_document()
         )
 

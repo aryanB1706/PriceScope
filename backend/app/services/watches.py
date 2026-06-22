@@ -131,7 +131,7 @@ def list_alerts(db: Database, user_id: str, limit: int) -> list[dict]:
     alerts = [
         Alert.from_document(doc)
         for doc in db.alerts.find({"user_id": user_id})
-        .sort("sent_at", DESCENDING)
+        .sort("detected_at", DESCENDING)
         .limit(limit)
     ]
     product_ids = list({alert.product_id for alert in alerts})

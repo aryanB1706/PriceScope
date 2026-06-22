@@ -16,6 +16,8 @@ from app.models.validation import (
     validate_firebase_uid,
     validate_non_empty_string,
     validate_non_negative_int,
+    validate_optional_error,
+    validate_optional_latency,
     validate_object_id,
     validate_optional_datetime,
     validate_optional_price,
@@ -208,8 +210,12 @@ class Alert:
     reason: AlertReason
     old_price: Decimal
     new_price: Decimal
-    sent_at: datetime = field(default_factory=utc_now)
+    detected_at: datetime = field(default_factory=utc_now)
+    sent_at: datetime | None = None
     email_status: EmailStatus = EmailStatus.PENDING
+    attempts: int = 0
+    error: str | None = None
+    latency_ms: float | None = None
     _id: ObjectId | None = None
 
     def __post_init__(self):
@@ -221,10 +227,20 @@ class Alert:
         object.__setattr__(self, "old_price", validate_price(self.old_price, "old_price"))
         object.__setattr__(self, "new_price", validate_price(self.new_price, "new_price"))
         object.__setattr__(
-            self, "sent_at", validate_datetime(self.sent_at, "sent_at")
+            self, "detected_at", validate_datetime(self.detected_at, "detected_at")
+        )
+        object.__setattr__(
+            self, "sent_at", validate_optional_datetime(self.sent_at, "sent_at")
         )
         object.__setattr__(
             self, "email_status", validate_email_status(self.email_status)
+        )
+        object.__setattr__(
+            self, "attempts", validate_non_negative_int(self.attempts, "attempts")
+        )
+        object.__setattr__(self, "error", validate_optional_error(self.error))
+        object.__setattr__(
+            self, "latency_ms", validate_optional_latency(self.latency_ms)
         )
 
     def to_document(self) -> dict:
@@ -234,8 +250,12 @@ class Alert:
             "reason": self.reason.value,
             "old_price": to_decimal128(self.old_price),
             "new_price": to_decimal128(self.new_price),
+            "detected_at": self.detected_at,
             "sent_at": self.sent_at,
             "email_status": self.email_status.value,
+            "attempts": self.attempts,
+            "error": self.error,
+            "latency_ms": self.latency_ms,
         }
         if self._id is not None:
             document["_id"] = self._id
@@ -250,6 +270,10 @@ class Alert:
             reason=document["reason"],
             old_price=document["old_price"],
             new_price=document["new_price"],
-            sent_at=document["sent_at"],
+            detected_at=document["detected_at"],
+            sent_at=document.get("sent_at"),
             email_status=document["email_status"],
+            attempts=document.get("attempts", 0),
+            error=document.get("error"),
+            latency_ms=document.get("latency_ms"),
         )

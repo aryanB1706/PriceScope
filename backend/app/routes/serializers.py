@@ -66,6 +66,7 @@ def alert_json(alert: Alert, product: Product | None) -> dict:
         "reason": alert.reason.value,
         "old_price": money(alert.old_price),
         "new_price": money(alert.new_price),
+        "detected_at": timestamp(alert.detected_at),
         "sent_at": timestamp(alert.sent_at),
         "email_status": alert.email_status.value,
     }

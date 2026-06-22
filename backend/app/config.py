@@ -31,3 +31,11 @@ class Config:
         "SCHEDULER_LOCK_PATH",
         os.path.join(tempfile.gettempdir(), "pricescope-scheduler.lock"),
     )
+
+    # Alert emails. Leave SMTP_HOST empty to disable sending.
+    SMTP_HOST = os.getenv("SMTP_HOST", "")
+    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
+    SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM = os.getenv("SMTP_FROM", "") or os.getenv("SMTP_USERNAME", "")
+    SMTP_SECURITY = os.getenv("SMTP_SECURITY", "starttls").strip().lower()

@@ -107,8 +107,12 @@ def test_alert_serializes_reason_and_email_status():
         reason="30d_low",
         old_price="2499.00",
         new_price="1999.00",
+        detected_at=NOW,
         sent_at=NOW,
         email_status="sent",
+        attempts=2,
+        error="SMTPServerDisconnected: retry",
+        latency_ms=842.5,
     )
 
     document = alert.to_document()
@@ -118,7 +122,25 @@ def test_alert_serializes_reason_and_email_status():
     assert document["reason"] == "30d_low"
     assert document["email_status"] == "sent"
     assert document["old_price"] == Decimal128("2499.00")
+    assert document["attempts"] == 2
+    assert document["latency_ms"] == 842.5
     assert Alert.from_document(document) == alert
+
+
+def test_alert_starts_pending_and_unsent():
+    alert = Alert(
+        user_id="firebase-uid",
+        product_id=ObjectId(),
+        reason="target_price",
+        old_price="100",
+        new_price="90",
+    )
+
+    assert alert.email_status is EmailStatus.PENDING
+    assert alert.sent_at is None
+    assert alert.attempts == 0
+    assert alert.error is None
+    assert alert.latency_ms is None
 
 
 @pytest.mark.parametrize(

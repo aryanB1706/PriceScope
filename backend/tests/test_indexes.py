@@ -26,3 +26,10 @@ def test_init_db_creates_indexes_and_can_run_twice():
         ("product_id", ASCENDING),
     ]
     assert watch_indexes["watches_user_product_unique"]["unique"] is True
+
+    alert_indexes = db.alerts.index_information()
+    assert alert_indexes["alerts_user_product_detected_at"]["key"] == [
+        ("user_id", ASCENDING),
+        ("product_id", ASCENDING),
+        ("detected_at", DESCENDING),
+    ]

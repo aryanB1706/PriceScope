@@ -15,13 +15,27 @@ INVALID_TOKEN_ERRORS = (
 )
 
 
-def _ensure_firebase_app() -> None:
+def _init_firebase(credentials_path: str) -> None:
     with _init_lock:
         if firebase_admin._apps:
             return
+        firebase_admin.initialize_app(
+            credentials.Certificate(credentials_path) if credentials_path else None
+        )
 
-        path = current_app.config.get("FIREBASE_CREDENTIALS_PATH")
-        firebase_admin.initialize_app(credentials.Certificate(path) if path else None)
+
+def _ensure_firebase_app() -> None:
+    _init_firebase(current_app.config.get("FIREBASE_CREDENTIALS_PATH"))
+
+
+def make_email_lookup(credentials_path: str):
+    """Build a uid -> email lookup that works outside a Flask app context."""
+
+    def lookup(uid: str) -> str | None:
+        _init_firebase(credentials_path)
+        return auth.get_user(uid).email
+
+    return lookup
 
 
 def verify_firebase_token(token: str) -> dict:

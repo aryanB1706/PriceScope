@@ -8,6 +8,7 @@ from app.errors import register_error_handlers
 from app.jobs.scheduler import init_scheduler, run_scrape_job
 from app.models import init_db
 from app.routes import register_routes
+from app.services.alerts import init_alerts
 
 
 def create_app(config_overrides: dict | None = None) -> Flask:
@@ -21,6 +22,7 @@ def create_app(config_overrides: dict | None = None) -> Flask:
     init_cors(app)
     register_error_handlers(app)
     register_routes(app)
+    init_alerts(app)
     init_scheduler(app)
 
     @app.cli.command("init-db")

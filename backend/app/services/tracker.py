@@ -80,12 +80,15 @@ def record_price(
     db: Database | None = None,
     scraper: BaseScraper | None = None,
     now: datetime | None = None,
+    alert_dispatcher=None,
 ) -> Product:
     """Scrape a tracked product and store the result.
 
     A price_history row is written only when the price or stock status changed,
     or when the last row is more than 24 hours old. If scraping fails, the
     stored price data is left untouched and the failure counter is incremented.
+    When the price dropped, matching watches are alerted (emails are sent on a
+    background thread, so this never waits on SMTP).
     """
     db = db if db is not None else get_db()
     now = now or utc_now()
@@ -104,6 +107,7 @@ def record_price(
         )
         return replace(product, consecutive_failures=product.consecutive_failures + 1)
 
+    detected_at = utc_now()
     latest = _latest_history(db, product_id)
     if _should_record(latest, scraped, now):
         _insert_history(db, product, scraped, now)
@@ -124,6 +128,11 @@ def record_price(
             }
         },
     )
+
+    if updated.current_price < product.current_price:
+        _notify_price_drop(
+            db, updated, product.current_price, detected_at, now, alert_dispatcher
+        )
     return updated
 
 
@@ -198,6 +207,31 @@ def is_30d_low(
         return False
 
     return product.current_price <= min(prior_prices)
+
+
+def _notify_price_drop(
+    db: Database,
+    product: Product,
+    old_price: Decimal,
+    detected_at: datetime,
+    now: datetime,
+    dispatcher,
+) -> None:
+    # Imported here: the alert engine imports this module for is_30d_low.
+    from app.services.alerts import process_price_drop
+
+    try:
+        process_price_drop(
+            db,
+            product,
+            old_price,
+            detected_at=detected_at,
+            now=now,
+            dispatcher=dispatcher,
+        )
+    except Exception:
+        # A broken alert must never lose the price we just recorded.
+        logger.exception("Alert processing failed for %s", product.url)
 
 
 def _should_record(

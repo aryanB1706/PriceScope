@@ -137,6 +137,22 @@ def validate_non_negative_int(value, field_name: str) -> int:
     return value
 
 
+def validate_optional_error(value) -> str | None:
+    if value is None:
+        return None
+    return str(value)[:500]
+
+
+def validate_optional_latency(value) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("latency_ms must be a number")
+    if value < 0:
+        raise ValueError("latency_ms must not be negative")
+    return float(value)
+
+
 def validate_bool(value, field_name: str) -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"{field_name} must be a boolean")

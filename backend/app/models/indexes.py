@@ -4,6 +4,7 @@ from pymongo.database import Database
 PRODUCTS_URL_INDEX = "products_url_unique"
 PRICE_HISTORY_PRODUCT_SCRAPED_INDEX = "price_history_product_scraped_at"
 WATCHES_USER_PRODUCT_INDEX = "watches_user_product_unique"
+ALERTS_USER_PRODUCT_DETECTED_INDEX = "alerts_user_product_detected_at"
 
 
 def init_db(db: Database) -> None:
@@ -16,4 +17,8 @@ def init_db(db: Database) -> None:
         [("user_id", ASCENDING), ("product_id", ASCENDING)],
         unique=True,
         name=WATCHES_USER_PRODUCT_INDEX,
+    )
+    db.alerts.create_index(
+        [("user_id", ASCENDING), ("product_id", ASCENDING), ("detected_at", DESCENDING)],
+        name=ALERTS_USER_PRODUCT_DETECTED_INDEX,
     )

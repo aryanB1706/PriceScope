@@ -20,8 +20,9 @@ PriceScope/
 │   │   ├── models/        # Dataclasses, validation, and index setup
 │   │   ├── routes/        # HTTP blueprints (health, products, watches, alerts)
 │   │   ├── scrapers/      # Fetch policy, store parsers, and URL registry
-│   │   ├── services/      # Price tracker, watches, and Firebase auth
+│   │   ├── services/      # Price tracker, alerts, watches, and Firebase auth
 │   │   └── jobs/          # APScheduler scrape job and scheduler setup
+│   ├── scripts/           # Developer tools (alert latency measurement)
 │   ├── tests/             # pytest suite
 │   ├── requirements.txt
 │   ├── pytest.ini
@@ -65,7 +66,7 @@ The API runs at `http://localhost:5000`. `init-db` is safe to run repeatedly.
 | `products` | Current product metadata and latest price | Unique `url` |
 | `price_history` | One document per price observation | `(product_id, scraped_at DESC)` |
 | `watches` | User price watches and alert preferences | Unique `(user_id, product_id)` |
-| `alerts` | Triggered price alerts and email status | None yet |
+| `alerts` | Triggered price alerts, email status, attempts, error and latency | `(user_id, product_id, detected_at DESC)` |
 | `job_runs` | One summary per scrape run (counts, duration) | None yet |
 
 Prices are stored as MongoDB `Decimal128` to avoid floating-point rounding errors. Datetimes are timezone-aware UTC. The Python models are plain frozen dataclasses with validation and BSON serialization helpers; there is no ORM.
@@ -85,6 +86,23 @@ Scraper tests load saved fixtures from `backend/tests/fixtures/` and never acces
 Every `SCRAPE_INTERVAL_HOURS` (default 6) a background job refreshes every product that has at least one watch, using up to 3 worker threads and a 2-second gap between requests to the same store. One failing product never stops the run. Each run is logged and stored in `job_runs`. Run it manually with `flask --app app scrape-now`.
 
 The scheduler is off unless `SCHEDULER_ENABLED=true`. It starts at most once per host: it is skipped in the Flask reloader's parent process, and a non-blocking file lock (`SCHEDULER_LOCK_PATH`) lets only one process (for example one gunicorn worker) own it. For several hosts, enable it on a single one.
+
+### Price alerts
+
+After `record_price()` stores a **price drop**, every watch on that product is checked: an alert fires when `new_price <= target_price`, or when `alert_on_30d_low` is on and the new price is a 30-day low (target price wins if both apply). Price rises and unchanged prices never alert.
+
+Anti-spam, per user and product: no second alert for the same price, and at most one per 24 hours unless the price drops below the last alert. Alerts whose email failed do not count, because the user never received them.
+
+Emails are queued to a background thread (`AlertDispatcher`) so scraping never waits on SMTP. Each alert document in `alerts` records `detected_at`, `sent_at` (when the email was handed to SMTP), `email_status` (`pending` / `sent` / `failed`), `attempts` (up to 3, with 2s and 4s backoff), the last `error`, and `latency_ms` (`detected_at` to `sent_at`, retries included). The recipient is looked up from Firebase by `user_id`. With `SMTP_HOST` empty, alerts are recorded as `failed` with an explanatory error.
+
+Measure latency with 20 simulated drops (in-process fake SMTP by default):
+
+```bash
+cd backend
+python scripts/measure_alert_latency.py                        # min / avg / p95 / max
+python scripts/measure_alert_latency.py --smtp-delay-ms 150    # add simulated network delay
+python scripts/measure_alert_latency.py --real --to you@example.com --drops 3   # real SMTP from .env
+```
 
 ### Health check
 
@@ -182,6 +200,10 @@ See `backend/.env.example`. The key settings are:
 | `SECRET_KEY` | Flask secret key | Development placeholder |
 | `FIREBASE_CREDENTIALS_PATH` | Path to Firebase service account JSON | Empty |
 | `FRONTEND_ORIGIN` | Only browser origin allowed by CORS | `http://localhost:5173` |
+| `SMTP_HOST` / `SMTP_PORT` | SMTP server for alert emails (empty host disables sending) | Empty / `587` |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | SMTP login (Gmail: an app password) | Empty |
+| `SMTP_FROM` | Sender address | `SMTP_USERNAME` |
+| `SMTP_SECURITY` | `starttls`, `ssl` or `none` | `starttls` |
 | `SCHEDULER_ENABLED` | Start the background scraper in the server process | `false` |
 | `SCRAPE_INTERVAL_HOURS` | Hours between scheduled scrape runs | `6` |
 
